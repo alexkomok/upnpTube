@@ -5,7 +5,7 @@ RUN apk add --no-cache \
     npm \
     yt-dlp
 
-RUN git clone https://github.com/mas94uk/upnpTube /tmp/upnpTube \
+RUN git clone https://github.com/alexkomok/upnpTube /tmp/upnpTube \
     && cd /tmp/upnpTube \
     && npm ci \
     && npm link
