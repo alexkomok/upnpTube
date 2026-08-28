@@ -1,6 +1,8 @@
 const assert = require('assert');
 const { readFileSync } = require('fs');
 const { test } = require('node:test');
+const { join } = require('path');
+const { pathToFileURL } = require('url');
 const { Renderer } = require('../renderer');
 
 test('adapts DLNA volume controls to the YouTube Music receiver contract', async () => {
@@ -58,4 +60,35 @@ test('serializes playback and uses renderer-specific temporary files', () => {
     assert.match(renderer, /setTimeout\(startPlayback, PLAY_AFTER_LOAD_DELAY_MS\)/);
     assert.match(renderer, /dlnaFeatures: 'DLNA\.ORG_PN=AAC_ISO'/);
     assert.doesNotMatch(doPlay, /client\.seek/);
+});
+
+test('retains a first playlist entry selected at index zero', async () => {
+    const playlistModulePath = join(
+        __dirname,
+        '..',
+        'node_modules',
+        'yt-cast-receiver',
+        'dist',
+        'lib',
+        'app',
+        'Playlist.js'
+    );
+    const { default: Playlist } = await import(pathToFileURL(playlistModulePath).href);
+    const playlist = new Playlist();
+    playlist.setRequestHandler({
+        async getPreviousNextVideosAbortable() {
+            return {};
+        }
+    });
+
+    await playlist.updateByMessage({
+        name: 'setPlaylist',
+        payload: {
+            listId: 'LM',
+            currentIndex: 0,
+            videoId: 'HyGngB-14MQ'
+        }
+    }, {});
+
+    assert.strictEqual(playlist.current.id, 'HyGngB-14MQ');
 });
