@@ -457,3 +457,34 @@ test('does not retry seek on non-transient errors', async () => {
     assert.strictEqual(await player.doSeek(112), false);
     assert.strictEqual(calls, 1);
 });
+
+test('keeps seek target during stale immediate position readback', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.hasLoadedTrack = true;
+    player.pendingSeekPosition = 112;
+    player.seekPositionWriteThroughUntil = Date.now() + 1000;
+    player.client = {
+        getPosition(callback) {
+            callback(null, 0);
+        }
+    };
+
+    assert.strictEqual(await player.doGetPosition(), 112);
+});
+
+test('accepts observed position once renderer catches up after seek', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.hasLoadedTrack = true;
+    player.pendingSeekPosition = 112;
+    player.seekPositionWriteThroughUntil = Date.now() + 1000;
+    player.client = {
+        getPosition(callback) {
+            callback(null, 113);
+        }
+    };
+
+    assert.strictEqual(await player.doGetPosition(), 113);
+    assert.strictEqual(player.pendingSeekPosition, null);
+});

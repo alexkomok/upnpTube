@@ -21,6 +21,8 @@ const PLAYBACK_MONITOR_INTERVAL_MS = 2000;
 const TRACK_END_EPSILON_SECONDS = 1;
 const VOLUME_WRITE_THROUGH_WINDOW_MS = 1500;
 const SEEK_RETRY_DELAY_MS = 250;
+const SEEK_POSITION_WRITE_THROUGH_WINDOW_MS = 2500;
+const SEEK_POSITION_ACCEPT_DELTA_SECONDS = 3;
 
 function isTransientSocketError(err) {
     if (!err) {
@@ -89,6 +91,9 @@ class Renderer extends Player {
         this.stopCallTimeoutMs = STOP_CALL_TIMEOUT_MS;
         this.lastKnownVolume = { level: 0, muted: false };
         this.volumeWriteThroughUntil = 0;
+        this.lastKnownPosition = 0;
+        this.pendingSeekPosition = null;
+        this.seekPositionWriteThroughUntil = 0;
         this.playbackActive = false;
         this.trackEndCheckInFlight = false;
         this.playbackMonitorIntervalMs = PLAYBACK_MONITOR_INTERVAL_MS;
@@ -353,6 +358,9 @@ async shutdown() {
                             obj.loadingTrack = false;
                             obj.hasLoadedTrack = !playErr;
                             if (!playErr) {
+                                obj.lastKnownPosition = position;
+                                obj.pendingSeekPosition = null;
+                                obj.seekPositionWriteThroughUntil = 0;
                                 obj.playbackActive = true;
                                 obj.stopProtectionExpiresAt =
                                     Date.now() + PLAYBACK_START_STOP_GRACE_MS;
@@ -463,6 +471,10 @@ async shutdown() {
             return new Promise(resolve => {
                 obj.client.seek(position, function(err) {
                     if (!err) {
+                        obj.pendingSeekPosition = position;
+                        obj.lastKnownPosition = position;
+                        obj.seekPositionWriteThroughUntil =
+                            Date.now() + SEEK_POSITION_WRITE_THROUGH_WINDOW_MS;
                         resolve(true);
                         return;
                     }
@@ -539,14 +551,32 @@ async shutdown() {
         const obj = this;
         return new Promise(function(resolve, reject) {
             obj.client.getPosition(function(err, result) {
+                const now = Date.now();
                 if(err) {
                     if (isTransientSocketError(err)) {
+                        if (obj.pendingSeekPosition !== null &&
+                            now < obj.seekPositionWriteThroughUntil) {
+                            resolve(obj.pendingSeekPosition);
+                            return;
+                        }
                         resolve(0);
                         return;
                     }
                     reject(err);
                 } else {
-                    resolve(normalizeSeconds(result));
+                    const observedPosition = normalizeSeconds(result);
+                    if (obj.pendingSeekPosition !== null &&
+                        now < obj.seekPositionWriteThroughUntil &&
+                        Math.abs(observedPosition - obj.pendingSeekPosition) >
+                            SEEK_POSITION_ACCEPT_DELTA_SECONDS) {
+                        resolve(obj.pendingSeekPosition);
+                        return;
+                    }
+
+                    obj.pendingSeekPosition = null;
+                    obj.seekPositionWriteThroughUntil = 0;
+                    obj.lastKnownPosition = observedPosition;
+                    resolve(observedPosition);
                 }
             });
         });
