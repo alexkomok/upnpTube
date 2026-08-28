@@ -296,17 +296,7 @@ async shutdown() {
                         });
                     };
 
-                    if (position > 0) {
-                        obj.client.seek(position, function(seekErr) {
-                            if (seekErr) {
-                                console.log(`[${obj.friendlyName}]: Seek error:`);
-                                console.log(seekErr);
-                            }
-                            startPlayback();
-                        });
-                    } else {
-                        setTimeout(startPlayback, PLAY_AFTER_LOAD_DELAY_MS);
-                    }
+                    setTimeout(startPlayback, PLAY_AFTER_LOAD_DELAY_MS);
                 });
             });
         });
