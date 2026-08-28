@@ -53,6 +53,7 @@ class Renderer extends Player {
         this.pendingVideoId = null;
         this.stopProtectionExpiresAt = 0;
         this.stopCallTimeoutMs = STOP_CALL_TIMEOUT_MS;
+        this.lastKnownVolume = { level: 0, muted: false };
         this.refresh();
 
         // Instantiate the mediarender client
@@ -420,9 +421,15 @@ async shutdown() {
         return new Promise(function(resolve, reject) {
             obj.client.getVolume(function(err, result) {
                 if(err) {
+                    if (isTransientSocketError(err)) {
+                        resolve(obj.lastKnownVolume || { level: 0, muted: false });
+                        return;
+                    }
                     reject(err);
                 } else {
-                    resolve({ level: result, muted: false });
+                    const volume = { level: result, muted: false };
+                    obj.lastKnownVolume = volume;
+                    resolve(volume);
                 }
             });
         });

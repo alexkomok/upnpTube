@@ -225,3 +225,30 @@ test('does not block forever when renderer never answers stop', async () => {
     assert.strictEqual(player.hasLoadedTrack, false);
     assert.ok(elapsed < 200);
 });
+
+test('falls back to last known volume on transient socket errors', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.lastKnownVolume = { level: 37, muted: false };
+    player.client = {
+        getVolume(callback) {
+            const err = new Error('socket hang up');
+            err.code = 'ECONNRESET';
+            callback(err);
+        }
+    };
+
+    assert.deepStrictEqual(await player.doGetVolume(), { level: 37, muted: false });
+});
+
+test('still rejects non-transient volume errors', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.client = {
+        getVolume(callback) {
+            callback(new Error('bad SOAP response'));
+        }
+    };
+
+    await assert.rejects(player.doGetVolume(), /bad SOAP response/);
+});
