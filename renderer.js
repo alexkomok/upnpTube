@@ -35,6 +35,8 @@ class Renderer extends Player {
         this.httpServer = null;
         this.hasLoadedTrack = false;
         this.playPromise = null;
+        this.playerPlayPromise = null;
+        this.pendingVideoId = null;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -215,6 +217,25 @@ async shutdown() {
     /**
      * The methods implementing yt-cast-receiver.Player
      */
+    async play(video, position, AID) {
+        if (this.playerPlayPromise && this.pendingVideoId === video.id) {
+            return this.playerPlayPromise;
+        }
+
+        // Cast senders can send several play commands while the playlist is updating.
+        const playback = super.play(video, position, AID);
+        this.playerPlayPromise = playback;
+        this.pendingVideoId = video.id;
+        try {
+            return await playback;
+        } finally {
+            if (this.playerPlayPromise === playback) {
+                this.playerPlayPromise = null;
+                this.pendingVideoId = null;
+            }
+        }
+    }
+
     async doPlay(video, position = 0) {
         if (this.playPromise) {
             return this.playPromise;
