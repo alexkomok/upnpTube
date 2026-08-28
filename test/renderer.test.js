@@ -203,3 +203,25 @@ test('still rejects non-transient position errors', async () => {
 
     await assert.rejects(player.doGetPosition(), /invalid XML response/);
 });
+
+test('does not block forever when renderer never answers stop', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.loadingTrack = false;
+    player.stopProtectionExpiresAt = 0;
+    player.hasLoadedTrack = true;
+    player.stopCallTimeoutMs = 5;
+    player.client = {
+        stop() {
+            // Simulate a renderer that never invokes the callback.
+        }
+    };
+
+    const started = Date.now();
+    const result = await player.doStop();
+    const elapsed = Date.now() - started;
+
+    assert.strictEqual(result, true);
+    assert.strictEqual(player.hasLoadedTrack, false);
+    assert.ok(elapsed < 200);
+});

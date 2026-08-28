@@ -16,6 +16,7 @@ const YTCR_BASE_PORT = 3005;
 const PROXY_BASE_PORT = 8000;
 const PLAY_AFTER_LOAD_DELAY_MS = 1000;
 const PLAYBACK_START_STOP_GRACE_MS = 5000;
+const STOP_CALL_TIMEOUT_MS = 2000;
 
 function isTransientSocketError(err) {
     if (!err) {
@@ -51,6 +52,7 @@ class Renderer extends Player {
         this.playerPlayPromise = null;
         this.pendingVideoId = null;
         this.stopProtectionExpiresAt = 0;
+        this.stopCallTimeoutMs = STOP_CALL_TIMEOUT_MS;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -369,10 +371,35 @@ async shutdown() {
 
         const obj = this;
         return new Promise(resolve => {
+            let settled = false;
+            const settle = function(ok) {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (ok) {
+                    obj.hasLoadedTrack = false;
+                }
+                resolve(ok);
+            };
+
+            const stopTimeout = setTimeout(function() {
+                // Some renderers intermittently never reply to Stop during
+                // track transitions. Continue so the next Play can proceed.
+                console.log(`[${obj.friendlyName}]: Stop timed out, continuing with next playback`);
+                settle(true);
+            }, obj.stopCallTimeoutMs);
+
             this.client.stop(function(err) {
-                if (err) console.log(`[${obj.friendlyName}]: Stop error:`, err);
-                if (!err) obj.hasLoadedTrack = false;
-                resolve(!err);
+                clearTimeout(stopTimeout);
+                if (err) {
+                    console.log(`[${obj.friendlyName}]: Stop error:`, err);
+                    settle(false);
+                    return;
+                }
+
+                settle(true);
             });
         });
     }
