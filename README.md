@@ -4,6 +4,8 @@ Cast from YouTube / YouTube Music mobile apps to DLNA/UPnP renderers (speakers, 
 
 This repository currently targets the `alexkomok/upnpTube` flow and includes a set of stability fixes for YouTube Music playback, next-track transitions, volume updates, and seek behavior on iEAST AudioCast-class renderers.
 
+Source/original repository: https://github.com/mas94uk/upnpTube
+
 ## What works
 
 - Device discovery via SSDP
