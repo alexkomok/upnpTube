@@ -421,3 +421,39 @@ test('does not auto-advance while playback is inactive', async () => {
     assert.strictEqual(nextCalls, 0);
     assert.strictEqual(player.endedNotified, false);
 });
+
+test('retries seek once on transient socket reset', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    let calls = 0;
+    player.client = {
+        seek(_position, callback) {
+            calls += 1;
+            if (calls === 1) {
+                const err = new Error('socket hang up');
+                err.code = 'ECONNRESET';
+                callback(err);
+                return;
+            }
+            callback(null);
+        }
+    };
+
+    assert.strictEqual(await player.doSeek(112), true);
+    assert.strictEqual(calls, 2);
+});
+
+test('does not retry seek on non-transient errors', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    let calls = 0;
+    player.client = {
+        seek(_position, callback) {
+            calls += 1;
+            callback(new Error('invalid args'));
+        }
+    };
+
+    assert.strictEqual(await player.doSeek(112), false);
+    assert.strictEqual(calls, 1);
+});

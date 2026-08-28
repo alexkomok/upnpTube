@@ -20,6 +20,7 @@ const STOP_CALL_TIMEOUT_MS = 2000;
 const PLAYBACK_MONITOR_INTERVAL_MS = 2000;
 const TRACK_END_EPSILON_SECONDS = 1;
 const VOLUME_WRITE_THROUGH_WINDOW_MS = 1500;
+const SEEK_RETRY_DELAY_MS = 250;
 
 function isTransientSocketError(err) {
     if (!err) {
@@ -458,12 +459,32 @@ async shutdown() {
     async doSeek(position) {
         console.log(`[${this.friendlyName}]: Seek to ${position}s`);
         const obj = this;
-        return new Promise(resolve => {
-            this.client.seek(position, function(err) {
-                if (err) console.log(`[${obj.friendlyName}]: Seek error:`, err);
-                resolve(!err);
+        const attemptSeek = function(attempt) {
+            return new Promise(resolve => {
+                obj.client.seek(position, function(err) {
+                    if (!err) {
+                        resolve(true);
+                        return;
+                    }
+
+                    if (isTransientSocketError(err) && attempt < 2) {
+                        console.log(
+                            `[${obj.friendlyName}]: Seek transient error, retrying...`,
+                            err
+                        );
+                        setTimeout(function() {
+                            attemptSeek(attempt + 1).then(resolve);
+                        }, SEEK_RETRY_DELAY_MS);
+                        return;
+                    }
+
+                    console.log(`[${obj.friendlyName}]: Seek error:`, err);
+                    resolve(false);
+                });
             });
-        });
+        };
+
+        return attemptSeek(1);
     }
 
     async doGetVolume() {
