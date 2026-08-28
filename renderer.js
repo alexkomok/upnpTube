@@ -14,6 +14,7 @@ const YTCR_BASE_PORT = 3005;
 
 // Use port 800n for the HTTPS->HTTP proxying of the media
 const PROXY_BASE_PORT = 8000;
+const PLAY_AFTER_LOAD_DELAY_MS = 500;
 
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
@@ -294,7 +295,7 @@ async shutdown() {
                             startPlayback();
                         });
                     } else {
-                        startPlayback();
+                        setTimeout(startPlayback, PLAY_AFTER_LOAD_DELAY_MS);
                     }
                 });
             });
