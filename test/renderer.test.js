@@ -272,6 +272,17 @@ test('still rejects non-transient volume errors', async () => {
     await assert.rejects(player.doGetVolume(), /bad SOAP response/);
 });
 
+test('reads transport state from UPnP client', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.client = {
+        getTransportInfo(callback) {
+            callback(null, { CurrentTransportState: 'PLAYING' });
+        }
+    };
+
+    assert.strictEqual(await player.doGetTransportState(), 'PLAYING');
+});
+
 test('auto-advances when playback reaches the track end', async () => {
     const player = Object.create(Renderer.prototype);
     player.friendlyName = 'Test speaker';
@@ -281,6 +292,7 @@ test('auto-advances when playback reaches the track end', async () => {
     player.loadingTrack = false;
     player.hasLoadedTrack = true;
     player.endedNotified = false;
+    player.client = {};
     player.doGetPosition = async () => 120;
     player.doGetDuration = async () => 120;
     let nextCalls = 0;
@@ -323,6 +335,35 @@ test('auto-advances when end check receives HH:MM:SS values', async () => {
 
     assert.strictEqual(nextCalls, 1);
     assert.strictEqual(player.endedNotified, true);
+});
+
+test('auto-advances when transport reports STOPPED', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.trackEndCheckInFlight = false;
+    player.stopped = false;
+    player.playbackActive = true;
+    player.loadingTrack = false;
+    player.hasLoadedTrack = true;
+    player.endedNotified = false;
+    player.client = {
+        getTransportInfo(callback) {
+            callback(null, { CurrentTransportState: 'STOPPED' });
+        }
+    };
+    player.doGetPosition = async () => 0;
+    player.doGetDuration = async () => 0;
+    let nextCalls = 0;
+    player.next = async () => {
+        nextCalls += 1;
+        return true;
+    };
+
+    await player.checkTrackEnd();
+
+    assert.strictEqual(nextCalls, 1);
+    assert.strictEqual(player.endedNotified, true);
+    assert.strictEqual(player.playbackActive, false);
 });
 
 test('does not auto-advance while playback is inactive', async () => {
