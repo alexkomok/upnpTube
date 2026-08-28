@@ -169,3 +169,37 @@ test('keeps the newly selected video current when the previous/next lookup fails
     assert.strictEqual(playlist.hasPrevious, false);
     assert.ok(loggedErrors.length > 0);
 });
+
+test('falls back to zero position and duration on transient socket errors', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.hasLoadedTrack = true;
+    player.client = {
+        getPosition(callback) {
+            const err = new Error('socket hang up');
+            err.code = 'ECONNRESET';
+            callback(err);
+        },
+        getDuration(callback) {
+            const err = new Error('socket hang up');
+            err.code = 'ECONNRESET';
+            callback(err);
+        }
+    };
+
+    assert.strictEqual(await player.doGetPosition(), 0);
+    assert.strictEqual(await player.doGetDuration(), 0);
+});
+
+test('still rejects non-transient position errors', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.hasLoadedTrack = true;
+    player.client = {
+        getPosition(callback) {
+            callback(new Error('invalid XML response'));
+        }
+    };
+
+    await assert.rejects(player.doGetPosition(), /invalid XML response/);
+});

@@ -17,6 +17,15 @@ const PROXY_BASE_PORT = 8000;
 const PLAY_AFTER_LOAD_DELAY_MS = 1000;
 const PLAYBACK_START_STOP_GRACE_MS = 5000;
 
+function isTransientSocketError(err) {
+    if (!err) {
+        return false;
+    }
+
+    const message = (err.message || '').toLowerCase();
+    return err.code === 'ECONNRESET' || message.includes('socket hang up');
+}
+
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
 /**
@@ -412,6 +421,10 @@ async shutdown() {
         return new Promise(function(resolve, reject) {
             obj.client.getPosition(function(err, result) {
                 if(err) {
+                    if (isTransientSocketError(err)) {
+                        resolve(0);
+                        return;
+                    }
                     reject(err);
                 } else {
                     resolve(result);
@@ -429,6 +442,10 @@ async shutdown() {
         return new Promise(function(resolve, reject) {
             obj.client.getDuration(function(err, result) {
                 if(err) {
+                    if (isTransientSocketError(err)) {
+                        resolve(0);
+                        return;
+                    }
                     reject(err);
                 } else {
                     resolve(result);
