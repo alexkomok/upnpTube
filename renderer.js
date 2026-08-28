@@ -14,6 +14,7 @@ const YTCR_BASE_PORT = 3005;
 
 // Use port 800n for the HTTPS->HTTP proxying of the media
 const PROXY_BASE_PORT = 8000;
+const PLAY_AFTER_LOAD_DELAY_MS = 1000;
 
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
@@ -263,7 +264,7 @@ async shutdown() {
 
                 exec('find /tmp -name "upnptube-*.m4a" -mtime +1 -delete');
                 const options = {
-                    autoplay: true,
+                    autoplay: false,
                     contentType: 'audio/m4a',
                     dlnaFeatures: 'DLNA.ORG_PN=AAC_ISO'
                 };
@@ -277,20 +278,28 @@ async shutdown() {
                         return;
                     }
 
+                    const startPlayback = function() {
+                        obj.client.play(function(playErr) {
+                            obj.loadingTrack = false;
+                            obj.hasLoadedTrack = !playErr;
+                            if (playErr) {
+                                console.log(`[${obj.friendlyName}]: Play error:`);
+                                console.log(playErr);
+                            }
+                            resolve(!playErr);
+                        });
+                    };
+
                     if (position > 0) {
                         obj.client.seek(position, function(seekErr) {
-                            obj.loadingTrack = false;
-                            obj.hasLoadedTrack = !seekErr;
                             if (seekErr) {
                                 console.log(`[${obj.friendlyName}]: Seek error:`);
                                 console.log(seekErr);
                             }
-                            resolve(!seekErr);
+                            startPlayback();
                         });
                     } else {
-                        obj.loadingTrack = false;
-                        obj.hasLoadedTrack = true;
-                        resolve(true);
+                        setTimeout(startPlayback, PLAY_AFTER_LOAD_DELAY_MS);
                     }
                 });
             });
