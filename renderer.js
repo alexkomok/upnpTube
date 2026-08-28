@@ -37,6 +37,8 @@ class Renderer extends Player {
         this.httpServer = null;
         this.hasLoadedTrack = false;
         this.playPromise = null;
+        this.loadingVideoId = null;
+        this.queuedPlay = null;
         this.playerPlayPromise = null;
         this.pendingVideoId = null;
         this.stopProtectionExpiresAt = 0;
@@ -241,10 +243,24 @@ async shutdown() {
 
     async doPlay(video, position = 0) {
         if (this.playPromise) {
+            if (this.loadingVideoId !== video.id) {
+                const queuedPlay = { video, position };
+                this.queuedPlay = queuedPlay;
+                return this.playPromise.then(() => {
+                    if (this.queuedPlay !== queuedPlay) {
+                        return false;
+                    }
+
+                    this.queuedPlay = null;
+                    return this.doPlay(video, position);
+                });
+            }
+
             return this.playPromise;
         }
 
         const videoId = video.id;
+        this.loadingVideoId = videoId;
         console.log(`[${this.friendlyName}]: Play ${videoId} at position ${position}s`);
         const obj = this;
         this.endedNotified = false;
@@ -307,6 +323,7 @@ async shutdown() {
         } finally {
             if (this.playPromise === playback) {
                 this.playPromise = null;
+                this.loadingVideoId = null;
             }
         }
     }

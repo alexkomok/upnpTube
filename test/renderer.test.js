@@ -43,7 +43,11 @@ test('serializes playback and uses renderer-specific temporary files', () => {
     );
 
     assert.match(renderer, /this\.playerPlayPromise && this\.pendingVideoId === video\.id/);
-    assert.match(renderer, /if \(this\.playPromise\) \{\s+return this\.playPromise;/);
+    assert.match(renderer, /if \(this\.playPromise\) \{/);
+    assert.match(renderer, /return this\.playPromise;/);
+    assert.match(renderer, /this\.loadingVideoId !== video\.id/);
+    assert.match(renderer, /this\.queuedPlay = queuedPlay/);
+    assert.match(renderer, /return this\.doPlay\(video, position\)/);
     assert.match(
         renderer,
         /this\.loadingTrack \|\| Date\.now\(\) < this\.stopProtectionExpiresAt/
