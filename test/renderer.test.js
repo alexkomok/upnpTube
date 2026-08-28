@@ -92,3 +92,36 @@ test('retains a first playlist entry selected at index zero', async () => {
 
     assert.strictEqual(playlist.current.id, 'HyGngB-14MQ');
 });
+
+test('normalizes YouTube Music videoEntry playlist selections', async () => {
+    const playlistModulePath = join(
+        __dirname,
+        '..',
+        'node_modules',
+        'yt-cast-receiver',
+        'dist',
+        'lib',
+        'app',
+        'Playlist.js'
+    );
+    const { default: Playlist } = await import(pathToFileURL(playlistModulePath).href);
+    const playlist = new Playlist();
+    playlist.setRequestHandler({
+        async getPreviousNextVideosAbortable() {
+            return {};
+        }
+    });
+
+    await playlist.updateByMessage({
+        name: 'setPlaylist',
+        payload: {
+            videoEntry: JSON.stringify({
+                sourceContainerPlaylistId: 'LM',
+                videoId: 'Z4jQ4hZfk00'
+            })
+        }
+    }, {});
+
+    assert.strictEqual(playlist.current.id, 'Z4jQ4hZfk00');
+    assert.strictEqual(playlist.current.context.index, 0);
+});
