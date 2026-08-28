@@ -43,5 +43,6 @@ test('serializes playback and uses renderer-specific temporary files', () => {
     assert.match(renderer, /if \(this\.loadingTrack\) \{\s+return true;/);
     assert.match(renderer, /upnptube-\$\{this\.index\}-\$\{videoId\}\.m4a/);
     assert.match(renderer, /--js-runtimes node/);
-    assert.match(renderer, /autoplay: true, contentType: 'audio\/mp4'/);
+    assert.match(renderer, /contentType: 'audio\/m4a'/);
+    assert.match(renderer, /dlnaFeatures: 'DLNA\.ORG_PN=AAC_ISO'/);
 });
