@@ -37,6 +37,10 @@ test('adapts DLNA volume controls to the YouTube Music receiver contract', async
 
 test('serializes playback and uses renderer-specific temporary files', () => {
     const renderer = readFileSync('renderer.js', 'utf8');
+    const doPlay = renderer.slice(
+        renderer.indexOf('async doPlay'),
+        renderer.indexOf('async doPause')
+    );
 
     assert.match(renderer, /this\.playerPlayPromise && this\.pendingVideoId === video\.id/);
     assert.match(renderer, /if \(this\.playPromise\) \{\s+return this\.playPromise;/);
@@ -49,4 +53,5 @@ test('serializes playback and uses renderer-specific temporary files', () => {
     assert.match(renderer, /autoplay: false/);
     assert.match(renderer, /setTimeout\(startPlayback, PLAY_AFTER_LOAD_DELAY_MS\)/);
     assert.match(renderer, /dlnaFeatures: 'DLNA\.ORG_PN=AAC_ISO'/);
+    assert.doesNotMatch(doPlay, /client\.seek/);
 });
