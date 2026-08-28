@@ -6,6 +6,8 @@ const httpProxy = require('http-proxy');
 
 // TODO: Ideally the author will accept the pull request and re-publish. Otherwise tie it to my fork.
 const Ytcr = require('yt-cast-receiver');
+const YouTubeCastReceiver = Ytcr.default || Ytcr;
+const Player = Ytcr.Player;
 
 // Use ports 3005, 3001, 3002 etc for successive YTCRs
 const YTCR_BASE_PORT = 3005;
@@ -19,7 +21,7 @@ const PROXY_BASE_PORT = 8000;
  * Class controlling a single upnp media renderer.
  * It implements yt-cast-receiver.Player so that it can receive and translate casts from YouTube.
  */
-class Renderer extends Ytcr.Player {
+class Renderer extends Player {
 
     constructor(location, index, timeout)
     {
@@ -68,39 +70,30 @@ class Renderer extends Ytcr.Player {
 
             // Create a youtube cast receiver
 
-const options = {
-    port: YTCR_BASE_PORT + obj.index,
+            const options = {
+                device: {
+                    name: obj.friendlyName,
+                    screenName: obj.friendlyName,
+                    brand: description.manufacturer,
+                    model: description.modelName
+                },
+                dial: {
+                    port: YTCR_BASE_PORT + obj.index,
+                    bindToAddresses: ['192.168.0.154']
+                },
+                logLevel: 'debug'
+            };
 
-    // DIAL device name shown by YouTube
-    friendlyName: obj.friendlyName,
-
-    // YouTube Lounge screen name
-    screenName: obj.friendlyName,
-
-    manufacturer: description.manufacturer,
-    modelName: description.modelName,
-
-    // Explicitly bind to the Pi's LAN address
-    bindToAddresses: ['192.168.0.154']
-};
-
-
-//            obj.ytcr = Ytcr.instance(obj, options);
-
-console.log("=== YTCR OPTIONS ===");
-console.log(JSON.stringify(options, null, 2));
-
-obj.ytcr = Ytcr.instance(obj, options);
-//
-
-            obj.ytcr.start();
-
-            obj.ytcr.setDebug(true);
-
-obj.ytcr.on('clientConnected', client => {
-    console.log(`[${obj.friendlyName}]: YouTube client connected`);
-    console.log(client);
-});
+            obj.ytcr = new YouTubeCastReceiver(obj, options);
+            obj.ytcr.on('senderConnect', client => {
+                console.log(`[${obj.friendlyName}]: YouTube client connected`);
+                console.log(client);
+            });
+            obj.ytcr.start().catch(err => {
+                console.log(`[${obj.friendlyName}]: Failed to start YouTube Cast Receiver:`);
+                console.log(err);
+                obj.error = true;
+            });
 
 
         });
@@ -220,261 +213,174 @@ async shutdown() {
     /**
      * The methods implementing yt-cast-receiver.Player
      */
-    async play(videoId, position = 0) {
+    async doPlay(video, position = 0) {
+        const videoId = video.id;
         console.log(`[${this.friendlyName}]: Play ${videoId} at position ${position}s`);
         const obj = this;
         this.endedNotified = false;
-        this.loadingTrack = false;
+        this.loadingTrack = true;
         console.log(`[${this.friendlyName}]: RESET endedNotified for ${videoId}`);
 
+        return new Promise(resolve => {
             const localFile = `/tmp/upnptube-${videoId}.m4a`;
             const localUrl = `http://192.168.0.154:9002/upnptube-${videoId}.m4a`;
             exec(`rm -f /tmp/upnptube-*.m4a && /home/pi/.local/bin/yt-dlp --js-runtimes /home/pi/.deno/bin/deno --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
                 if (err) {
+                    obj.loadingTrack = false;
                     console.log(`[${obj.friendlyName}]: yt-dlp download failed`);
                     console.log(err);
+                    resolve(false);
                     return;
                 }
 
-                // cleanup old files
                 exec('find /tmp -name "upnptube-*.m4a" -mtime +1 -delete');
-const options = {
-    autoplay: false,
-    contentType: 'audio/mp4'
-};
+                const options = { autoplay: false, contentType: 'audio/mp4' };
+                console.log("LOCAL URL:", localUrl);
+                obj.client.load(localUrl, options, function(loadErr) {
+                    if (loadErr) {
+                        obj.loadingTrack = false;
+                        console.log(`[${obj.friendlyName}]: Error loading local media:`);
+                        console.log(loadErr);
+                        resolve(false);
+                        return;
+                    }
 
-console.log("LOCAL URL:", localUrl);
-console.log(`[${obj.friendlyName}]: Loading track, requested position=${position}s`);
+                    const startPlayback = function() {
+                        obj.client.play(function(playErr) {
+                            obj.loadingTrack = false;
+                            if (playErr) {
+                                console.log(`[${obj.friendlyName}]: Play error:`);
+                                console.log(playErr);
+                            }
+                            resolve(!playErr);
+                        });
+                    };
 
-obj.client.load(localUrl, options, function(err, result) {
-    if (err) {
-        obj.loadingTrack = false;
-        console.log(`[${obj.friendlyName}]: Error loading local media:`);
-        console.log(err);
-        return;
-    }
-
-    console.log(`[${obj.friendlyName}]: Media loaded`);
-
-    const startPlayback = function() {
-        obj.client.play(function(playErr, playResult) {
-            obj.loadingTrack = false;
-
-            if (playErr) {
-                console.log(`[${obj.friendlyName}]: Play error:`);
-                console.log(playErr);
-                return;
-            }
-
-            console.log(
-                `[${obj.friendlyName}]: EXPLICIT PLAY at requested position ${position}s`
-            );
-
-            obj.notifyPlayed();
-        });
-    };
-
-    if (position > 0) {
-        console.log(
-            `[${obj.friendlyName}]: Seeking to requested position ${position}s`
-        );
-
-        obj.client.seek(position, function(seekErr, seekResult) {
-            if (seekErr) {
-                console.log(`[${obj.friendlyName}]: Seek error:`);
-                console.log(seekErr);
-
-                // If seeking fails, still start playback from 0.
-                startPlayback();
-                return;
-            }
-
-            console.log(
-                `[${obj.friendlyName}]: Seeked to ${position}s`
-            );
-
-            startPlayback();
-        });
-    } else {
-        startPlayback();
-    }
-});
-
-
-
+                    if (position > 0) {
+                        obj.client.seek(position, function(seekErr) {
+                            if (seekErr) {
+                                console.log(`[${obj.friendlyName}]: Seek error:`);
+                                console.log(seekErr);
+                            }
+                            startPlayback();
+                        });
+                    } else {
+                        startPlayback();
+                    }
+                });
             });
-
+        });
     }
 
 
 
-    async pause() {
+    async doPause() {
         console.log(`[${this.friendlyName}]: Pause`);
         const obj = this;
-
-        // Pause the dlna renderer
-        this.client.pause(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Pause error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Paused`);
-
-                // Notify YouTube that we have paused
-                obj.notifyPaused();
-            }
+        return new Promise(resolve => {
+            this.client.pause(function(err) {
+                if (err) console.log(`[${obj.friendlyName}]: Pause error:`, err);
+                resolve(!err);
+            });
         });
     }
 
-    async resume() {
+    async doResume() {
         console.log(`[${this.friendlyName}]: Resume`);
         const obj = this;
-
-        // Play (=resume) the dlna renderer
-        this.client.play(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Resume error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Resumed`);
-
-                // Notify YouTube that we have resumed
-                obj.notifyResumed();
-            }
+        return new Promise(resolve => {
+            this.client.play(function(err) {
+                if (err) console.log(`[${obj.friendlyName}]: Resume error:`, err);
+                resolve(!err);
+            });
         });
     }
 
-    async stop() {
+    async doStop() {
         console.log(`[${this.friendlyName}]: Stop`);
         const obj = this;
-        
-        // Stop the dlna renderer
-        this.client.stop(function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Stop error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Stopped`);
-
-                // Notify YouTube that we have stopped
-                obj.notifyStopped();
-            }
+        return new Promise(resolve => {
+            this.client.stop(function(err) {
+                if (err) console.log(`[${obj.friendlyName}]: Stop error:`, err);
+                resolve(!err);
+            });
         });
     }
 
-    async seek(position, statusBeforeSeek) {
-        console.log(`[${this.friendlyName}]: Seek to ${position}s, statusBeforeSeek ${statusBeforeSeek}`);
+    async doSeek(position) {
+        console.log(`[${this.friendlyName}]: Seek to ${position}s`);
         const obj = this;
-
-        // Tell the dlna renderer to seek
-        this.client.seek(position, function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: Seek error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Seeked`);
-
-                // Notify YouTube that we have seeked
-                obj.notifySeeked(statusBeforeSeek);
-            }
+        return new Promise(resolve => {
+            this.client.seek(position, function(err) {
+                if (err) console.log(`[${obj.friendlyName}]: Seek error:`, err);
+                resolve(!err);
+            });
         });
     }
 
-    async getVolume() {
-        console.log(`[${this.friendlyName}]: getVolume`);
+    async doGetVolume() {
         const obj = this;
-
-        const promise = new Promise(function(resolve, reject) {
+        return new Promise(function(resolve, reject) {
             obj.client.getVolume(function(err, result) {
                 if(err) {
-                    console.log(`[${obj.friendlyName}]: getVolume error:`);
-                    console.log(err);
                     reject(err);
                 } else {
-                    console.log(`[${obj.friendlyName}]: getVolume ${result}`);
-                    resolve(result);
+                    resolve({ level: result, muted: false });
                 }
-            })
-        });
-
-        return promise;
-    }
-
-    async setVolume(volume) {
-        console.log(`[${this.friendlyName}]: setVolume to ${volume}`);
-        const obj = this;
-
-        // Set the volume on the dlna renderer
-        this.client.setVolume(volume, function(err, result) {
-            if (err) {
-                console.log(`[${obj.friendlyName}]: setVolume error:`);
-                console.log(err);
-            } else {
-                console.log(`[${obj.friendlyName}]: Volume set`);
-
-                // Notify YouTube that we have stopped
-                obj.notifyVolumeChanged();
-            }
+            });
         });
     }
 
-    async getPosition() {
-        console.log(`[${this.friendlyName}]: getPosition`);
-
+    async doSetVolume(volume) {
+        console.log(`[${this.friendlyName}]: setVolume to ${volume.level}`);
         const obj = this;
+        return new Promise(resolve => {
+            this.client.setVolume(volume.level, function(err) {
+                if (err) console.log(`[${obj.friendlyName}]: setVolume error:`, err);
+                resolve(!err);
+            });
+        });
+    }
 
-        const promise = new Promise(function(resolve, reject) {
+    async doGetPosition() {
+        const obj = this;
+        return new Promise(function(resolve, reject) {
             obj.client.getPosition(function(err, result) {
                 if(err) {
-                    console.log(`[${obj.friendlyName}]: getPosition error:`);
-                    console.log(err);
                     reject(err);
                 } else {
-
-console.log(`[${obj.friendlyName}]: getPosition ${result}`);
-
-obj.client.getDuration(function(durErr, duration) {
-    console.log(`[${obj.friendlyName}]: END CHECK pos=${result} dur=${duration} durErr=${durErr} endedNotified=${obj.endedNotified} loadingTrack=${obj.loadingTrack}`);
-if (obj.loadingTrack) {
-    resolve(result);
-    return;
-}
-
-
-    if (!obj.endedNotified && !durErr && duration > 0 && result >= duration) {
-        obj.endedNotified = true;
-        console.log(`[${obj.friendlyName}]: TRACK ENDED FIRED pos=${result} dur=${duration}`);
-        console.trace("TRACK ENDED TRACE");
-        obj.notifyStopped();
-    }
-
-    resolve(result);
-});                }
-            })
+                    obj.client.getDuration(function(durationErr, duration) {
+                        if (
+                            !obj.loadingTrack &&
+                            !obj.endedNotified &&
+                            !durationErr &&
+                            duration > 0 &&
+                            result >= duration
+                        ) {
+                            obj.endedNotified = true;
+                            obj.next().catch(nextErr => {
+                                console.log(`[${obj.friendlyName}]: Failed to advance queue:`);
+                                console.log(nextErr);
+                            });
+                        }
+                        resolve(result);
+                    });
+                }
+            });
         });
-
-        return promise;
     }
 
-    async getDuration() {
-        console.log(`[${this.friendlyName}]: getDuration`);
-
+    async doGetDuration() {
         const obj = this;
-
-        const promise = new Promise(function(resolve, reject) {
+        return new Promise(function(resolve, reject) {
             obj.client.getDuration(function(err, result) {
                 if(err) {
-                    console.log(`[${obj.friendlyName}]: getDuration error:`);
-                    console.log(err);
                     reject(err);
                 } else {
-                    console.log(`[${obj.friendlyName}]: getDuration ${result}`);
                     resolve(result);
                 }
-            })
+            });
         });
-
-        return promise;
     }
 }
 

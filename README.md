@@ -9,7 +9,7 @@ The YouTube app can be used to play, pause, stop and control the volume of the p
 ## Installation
 
 ### Local installation
-Install npm and node.js:
+Install Node.js 18 or later and npm:
 
     sudo apt install npm
     
