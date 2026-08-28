@@ -262,7 +262,11 @@ async shutdown() {
                 }
 
                 exec('find /tmp -name "upnptube-*.m4a" -mtime +1 -delete');
-                const options = { autoplay: true, contentType: 'audio/mp4' };
+                const options = {
+                    autoplay: true,
+                    contentType: 'audio/m4a',
+                    dlnaFeatures: 'DLNA.ORG_PN=AAC_ISO'
+                };
                 console.log("LOCAL URL:", localUrl);
                 obj.client.load(localUrl, options, function(loadErr) {
                     if (loadErr) {
