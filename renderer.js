@@ -29,6 +29,36 @@ function isTransientSocketError(err) {
     return err.code === 'ECONNRESET' || message.includes('socket hang up');
 }
 
+function normalizeSeconds(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return 0;
+        }
+
+        const numeric = Number(trimmed);
+        if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+            return numeric;
+        }
+
+        const parts = trimmed.split(':');
+        if (parts.length === 3) {
+            const hours = Number(parts[0]);
+            const minutes = Number(parts[1]);
+            const seconds = Number(parts[2]);
+            if (![hours, minutes, seconds].some(Number.isNaN)) {
+                return (hours * 3600) + (minutes * 60) + seconds;
+            }
+        }
+    }
+
+    return 0;
+}
+
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
 /**
@@ -479,7 +509,7 @@ async shutdown() {
                     }
                     reject(err);
                 } else {
-                    resolve(result);
+                    resolve(normalizeSeconds(result));
                 }
             });
         });
@@ -500,7 +530,7 @@ async shutdown() {
                     }
                     reject(err);
                 } else {
-                    resolve(result);
+                    resolve(normalizeSeconds(result));
                 }
             });
         });

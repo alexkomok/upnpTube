@@ -193,6 +193,23 @@ test('falls back to zero position and duration on transient socket errors', asyn
     assert.strictEqual(await player.doGetDuration(), 0);
 });
 
+test('normalizes HH:MM:SS position and duration from UPnP responses', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.hasLoadedTrack = true;
+    player.client = {
+        getPosition(callback) {
+            callback(null, '00:02:15');
+        },
+        getDuration(callback) {
+            callback(null, '00:03:30');
+        }
+    };
+
+    assert.strictEqual(await player.doGetPosition(), 135);
+    assert.strictEqual(await player.doGetDuration(), 210);
+});
+
 test('still rejects non-transient position errors', async () => {
     const player = Object.create(Renderer.prototype);
     player.friendlyName = 'Test speaker';
@@ -277,6 +294,35 @@ test('auto-advances when playback reaches the track end', async () => {
     assert.strictEqual(nextCalls, 1);
     assert.strictEqual(player.endedNotified, true);
     assert.strictEqual(player.playbackActive, false);
+});
+
+test('auto-advances when end check receives HH:MM:SS values', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.trackEndCheckInFlight = false;
+    player.stopped = false;
+    player.playbackActive = true;
+    player.loadingTrack = false;
+    player.hasLoadedTrack = true;
+    player.endedNotified = false;
+    player.client = {
+        getPosition(callback) {
+            callback(null, '00:02:00');
+        },
+        getDuration(callback) {
+            callback(null, '00:02:01');
+        }
+    };
+    let nextCalls = 0;
+    player.next = async () => {
+        nextCalls += 1;
+        return true;
+    };
+
+    await player.checkTrackEnd();
+
+    assert.strictEqual(nextCalls, 1);
+    assert.strictEqual(player.endedNotified, true);
 });
 
 test('does not auto-advance while playback is inactive', async () => {
