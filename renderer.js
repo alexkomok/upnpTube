@@ -14,7 +14,6 @@ const YTCR_BASE_PORT = 3005;
 
 // Use port 800n for the HTTPS->HTTP proxying of the media
 const PROXY_BASE_PORT = 8000;
-const PLAY_AFTER_LOAD_DELAY_MS = 500;
 
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
@@ -263,7 +262,7 @@ async shutdown() {
                 }
 
                 exec('find /tmp -name "upnptube-*.m4a" -mtime +1 -delete');
-                const options = { autoplay: false, contentType: 'audio/mp4' };
+                const options = { autoplay: true, contentType: 'audio/mp4' };
                 console.log("LOCAL URL:", localUrl);
                 obj.client.load(localUrl, options, function(loadErr) {
                     if (loadErr) {
@@ -274,28 +273,20 @@ async shutdown() {
                         return;
                     }
 
-                    const startPlayback = function() {
-                        obj.client.play(function(playErr) {
-                            obj.loadingTrack = false;
-                            obj.hasLoadedTrack = !playErr;
-                            if (playErr) {
-                                console.log(`[${obj.friendlyName}]: Play error:`);
-                                console.log(playErr);
-                            }
-                            resolve(!playErr);
-                        });
-                    };
-
                     if (position > 0) {
                         obj.client.seek(position, function(seekErr) {
+                            obj.loadingTrack = false;
+                            obj.hasLoadedTrack = !seekErr;
                             if (seekErr) {
                                 console.log(`[${obj.friendlyName}]: Seek error:`);
                                 console.log(seekErr);
                             }
-                            startPlayback();
+                            resolve(!seekErr);
                         });
                     } else {
-                        setTimeout(startPlayback, PLAY_AFTER_LOAD_DELAY_MS);
+                        obj.loadingTrack = false;
+                        obj.hasLoadedTrack = true;
+                        resolve(true);
                     }
                 });
             });
