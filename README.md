@@ -1,49 +1,84 @@
 # upnpTube
-Cast from YouTube app to DLNA/UPNP renderers.
 
-Run upnpTube on a machine on your local network. It finds all UPnP / DLNA renderers (Wifi speakers, amplifiers, smart TVs etc.) and lets you cast to them from the Android/iPhone YouTube apps.
+Cast from YouTube / YouTube Music mobile apps to DLNA/UPnP renderers (speakers, amps, TVs) on your local network.
 
-The YouTube app can be used to play, pause, stop and control the volume of the player.
+This repository currently targets the `alexkomok/upnpTube` flow and includes a set of stability fixes for YouTube Music playback, next-track transitions, volume updates, and seek behavior on iEAST AudioCast-class renderers.
 
+## What works
+
+- Device discovery via SSDP
+- Cast receiver exposure in YouTube / YouTube Music
+- Play / pause / resume / stop
+- Next track handling for sender-driven playlist changes
+- Auto-next handling with renderer-side end detection
+- Volume control with stale-read mitigation
+- Seek with transient socket-reset retry and UI position stabilization
+
+## Requirements
+
+- Node.js `>=18`
+- npm
+- `yt-dlp` installed on the host
+
+This code currently expects `yt-dlp` at:
+
+- `/home/pi/.local/bin/yt-dlp`
+
+## Important local configuration
+
+Before running, adjust hardcoded network values in `renderer.js` for your host:
+
+- DIAL bind address (`bindToAddresses`) is currently `192.168.0.154`
+- Local media URL host is currently `http://192.168.0.154:9002/...`
+
+If your machine IP is different, update both values.
 
 ## Installation
 
-### Local installation
-Install Node.js 18 or later and npm:
+```bash
+git clone https://github.com/alexkomok/upnpTube.git
+cd upnpTube
+npm ci
+```
 
-    sudo apt install npm
-    
-Install upnpTube:
+`npm ci` runs `patch-package` via `postinstall`, applying local fixes to `yt-cast-receiver` from `patches/`.
 
-    mkdir upnpTube
-    cd upnoTube
-    npm install https://github.com/mas94uk/upnpTube
-    sudo npm link
-    
-Install yt-dlp:
+## Run
 
-    sudo apt install yt-dlp
+```bash
+node index.js
+```
 
-Run it:
+You should see logs like:
 
-    upnpTube
-    
+- `Local file server listening on port 9002`
+- `DIAL server listening on port 3005`
+- renderer discovery / sender connection logs
 
-### Installation using Docker
-Clone this repository:
+## How it works
 
-    git clone git@github.com:mas94uk/upnpTube.git
+1. SSDP discovers `MediaRenderer:1` devices.
+2. A `yt-cast-receiver` instance is started per renderer.
+3. On play, audio is downloaded with `yt-dlp` to `/tmp/upnptube-<index>-<videoId>.m4a`.
+4. The local Express server (port `9002`) serves `/tmp`.
+5. The renderer is instructed to load/play the local `audio/m4a` URL (DLNA profile `AAC_ISO`).
 
-Create and start the Docker image:
+## Debugging
 
-    cd upnpTube
-    docker-compose up [--detach]
+Useful command for UPnP call tracing:
 
-### How it works
-upnpTube scans for DLNA/UPNP renderers on your network. For each one it finds, it creates a YouTube Cast Receiver, named after the renderer.
-When a YouTube Cast Receiver receives a cast, it uses yt-dlp to find an audio-only stream, which it proxies (since it will be available as HTTPS and most renderers support only HTTP). It instructs the renderer to play the proxied stream.
+```bash
+DEBUG=upnp-device-client node index.js
+```
 
+Common focused grep while reproducing:
 
-### Limitations
+```bash
+DEBUG=upnp-device-client node index.js 2>&1 | grep --line-buffered -Ei \
+'setPlaylist|Player\.(play|stop|next|seek)|SetAVTransportURI|GetPositionInfo|GetMediaInfo|GetVolume|LOCAL URL|socket hang up|ECONNRESET'
+```
 
-Seeking does not work. I have not done much investigation into why.
+## Notes and limitations
+
+- Behavior can vary across DLNA renderers; this repo includes renderer-specific mitigations for transient UPnP socket resets.
+- If you update `yt-cast-receiver`, revalidate `patches/yt-cast-receiver+2.1.0.patch`.
