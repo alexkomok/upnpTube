@@ -15,6 +15,7 @@ const YTCR_BASE_PORT = 3005;
 // Use port 800n for the HTTPS->HTTP proxying of the media
 const PROXY_BASE_PORT = 8000;
 const PLAY_AFTER_LOAD_DELAY_MS = 1000;
+const PLAYBACK_START_STOP_GRACE_MS = 5000;
 
 // TODO Does this clean up nicely? YTCR instance disappear from the menu in the youtube app? Port freed etc?
 
@@ -38,6 +39,7 @@ class Renderer extends Player {
         this.playPromise = null;
         this.playerPlayPromise = null;
         this.pendingVideoId = null;
+        this.stopProtectionExpiresAt = 0;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -282,6 +284,10 @@ async shutdown() {
                         obj.client.play(function(playErr) {
                             obj.loadingTrack = false;
                             obj.hasLoadedTrack = !playErr;
+                            if (!playErr) {
+                                obj.stopProtectionExpiresAt =
+                                    Date.now() + PLAYBACK_START_STOP_GRACE_MS;
+                            }
                             if (playErr) {
                                 console.log(`[${obj.friendlyName}]: Play error:`);
                                 console.log(playErr);
@@ -341,7 +347,7 @@ async shutdown() {
 
     async doStop() {
         console.log(`[${this.friendlyName}]: Stop`);
-        if (this.loadingTrack) {
+        if (this.loadingTrack || Date.now() < this.stopProtectionExpiresAt) {
             return true;
         }
 
