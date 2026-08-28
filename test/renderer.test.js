@@ -283,6 +283,39 @@ test('reads transport state from UPnP client', async () => {
     assert.strictEqual(await player.doGetTransportState(), 'PLAYING');
 });
 
+test('keeps requested volume during immediate stale UPnP readback', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.lastKnownVolume = { level: 17, muted: false };
+    player.volumeWriteThroughUntil = 0;
+    player.client = {
+        setVolume(_level, callback) {
+            callback(null);
+        },
+        getVolume(callback) {
+            // Device still reports old level right after SetVolume.
+            callback(null, 17);
+        }
+    };
+
+    await player.doSetVolume({ level: 11, muted: false });
+    assert.deepStrictEqual(await player.doGetVolume(), { level: 11, muted: false });
+});
+
+test('accepts observed volume after write-through window expires', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.lastKnownVolume = { level: 11, muted: false };
+    player.volumeWriteThroughUntil = Date.now() - 1;
+    player.client = {
+        getVolume(callback) {
+            callback(null, 17);
+        }
+    };
+
+    assert.deepStrictEqual(await player.doGetVolume(), { level: 17, muted: false });
+});
+
 test('auto-advances when playback reaches the track end', async () => {
     const player = Object.create(Renderer.prototype);
     player.friendlyName = 'Test speaker';

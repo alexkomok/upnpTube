@@ -19,6 +19,7 @@ const PLAYBACK_START_STOP_GRACE_MS = 5000;
 const STOP_CALL_TIMEOUT_MS = 2000;
 const PLAYBACK_MONITOR_INTERVAL_MS = 2000;
 const TRACK_END_EPSILON_SECONDS = 1;
+const VOLUME_WRITE_THROUGH_WINDOW_MS = 1500;
 
 function isTransientSocketError(err) {
     if (!err) {
@@ -86,6 +87,7 @@ class Renderer extends Player {
         this.stopProtectionExpiresAt = 0;
         this.stopCallTimeoutMs = STOP_CALL_TIMEOUT_MS;
         this.lastKnownVolume = { level: 0, muted: false };
+        this.volumeWriteThroughUntil = 0;
         this.playbackActive = false;
         this.trackEndCheckInFlight = false;
         this.playbackMonitorIntervalMs = PLAYBACK_MONITOR_INTERVAL_MS;
@@ -475,7 +477,17 @@ async shutdown() {
                     }
                     reject(err);
                 } else {
-                    const volume = { level: result, muted: false };
+                    const observedVolume = { level: result, muted: false };
+                    const now = Date.now();
+                    const isWithinWriteThroughWindow = now < obj.volumeWriteThroughUntil;
+                    if (isWithinWriteThroughWindow &&
+                        obj.lastKnownVolume &&
+                        observedVolume.level !== obj.lastKnownVolume.level) {
+                        resolve(obj.lastKnownVolume);
+                        return;
+                    }
+
+                    const volume = observedVolume;
                     obj.lastKnownVolume = volume;
                     resolve(volume);
                 }
@@ -489,6 +501,10 @@ async shutdown() {
         return new Promise(resolve => {
             this.client.setVolume(volume.level, function(err) {
                 if (err) console.log(`[${obj.friendlyName}]: setVolume error:`, err);
+                if (!err) {
+                    obj.lastKnownVolume = { level: volume.level, muted: !!volume.muted };
+                    obj.volumeWriteThroughUntil = Date.now() + VOLUME_WRITE_THROUGH_WINDOW_MS;
+                }
                 resolve(!err);
             });
         });
