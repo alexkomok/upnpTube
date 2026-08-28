@@ -125,3 +125,47 @@ test('normalizes YouTube Music videoEntry playlist selections', async () => {
     assert.strictEqual(playlist.current.id, 'Z4jQ4hZfk00');
     assert.strictEqual(playlist.current.context.index, 0);
 });
+
+test('keeps the newly selected video current when the previous/next lookup fails', async () => {
+    const playlistModulePath = join(
+        __dirname,
+        '..',
+        'node_modules',
+        'yt-cast-receiver',
+        'dist',
+        'lib',
+        'app',
+        'Playlist.js'
+    );
+    const { default: Playlist } = await import(pathToFileURL(playlistModulePath).href);
+    const playlist = new Playlist();
+    const loggedErrors = [];
+    playlist.setLogger({
+        error(...args) {
+            loggedErrors.push(args);
+        }
+    });
+    playlist.setRequestHandler({
+        async getPreviousNextVideosAbortable() {
+            // Simulate a transient network failure (e.g. ECONNRESET/"socket hang up")
+            // while fetching previous/next video info from YouTube.
+            throw new Error('socket hang up');
+        }
+    });
+
+    // Should not throw even though the previous/next lookup rejected; the newly
+    // selected video must still become current so playback can proceed.
+    await playlist.updateByMessage({
+        name: 'setPlaylist',
+        payload: {
+            listId: 'LM',
+            currentIndex: 0,
+            videoId: 'HyGngB-14MQ'
+        }
+    }, {});
+
+    assert.strictEqual(playlist.current.id, 'HyGngB-14MQ');
+    assert.strictEqual(playlist.hasNext, false);
+    assert.strictEqual(playlist.hasPrevious, false);
+    assert.ok(loggedErrors.length > 0);
+});

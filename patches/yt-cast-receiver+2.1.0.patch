@@ -1,5 +1,5 @@
 diff --git a/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js b/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
-index 311a743..36a70cd 100644
+index 311a743..e6b3ed1 100644
 --- a/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
 +++ b/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
 @@ -73,6 +73,16 @@ class Playlist extends EventEmitter {
@@ -28,3 +28,18 @@ index 311a743..36a70cd 100644
                  const context = {
                      playlistId: data.listId,
                      index: parseInt(data.currentIndex, 10)
+@@ -311,7 +321,13 @@ _Playlist_id = new WeakMap(), _Playlist_videoIds = new WeakMap(), _Playlist_curr
+                 if (error.name === 'AbortError') {
+                     return;
+                 }
+-                throw error;
++                // A transient network failure while fetching previous/next video info
++                // should not prevent the current video from playing (or next()/previous()
++                // from advancing). Log and continue with previous/next left unset instead
++                // of throwing, which would otherwise abort the in-progress setPlaylist/
++                // next/previous handling before playback is triggered.
++                __classPrivateFieldGet(this, _Playlist_logger, "f").error('[yt-cast-receiver] Failed to fetch previous/next videos:', error);
++                return;
+             }
+             finally {
+                 __classPrivateFieldSet(this, _Playlist_previousNextAbortController, null, "f");
