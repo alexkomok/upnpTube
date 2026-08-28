@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { readFileSync } = require('fs');
 const { test } = require('node:test');
 const { Renderer } = require('../renderer');
 
@@ -32,4 +33,12 @@ test('adapts DLNA volume controls to the YouTube Music receiver contract', async
     player.hasLoadedTrack = true;
     assert.strictEqual(await player.doGetPosition(), 30);
     assert.strictEqual(await player.doGetDuration(), 240);
+});
+
+test('serializes playback and uses renderer-specific temporary files', () => {
+    const renderer = readFileSync('renderer.js', 'utf8');
+
+    assert.match(renderer, /if \(this\.playPromise\) \{\s+return this\.playPromise;/);
+    assert.match(renderer, /upnptube-\$\{this\.index\}-\$\{videoId\}\.m4a/);
+    assert.match(renderer, /--js-runtimes node/);
 });
