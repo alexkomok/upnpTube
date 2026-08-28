@@ -536,6 +536,24 @@ async shutdown() {
         });
     }
 
+    async doGetTransportState() {
+        const obj = this;
+        return new Promise(function(resolve, reject) {
+            obj.client.getTransportInfo(function(err, result) {
+                if (err) {
+                    if (isTransientSocketError(err)) {
+                        resolve(null);
+                        return;
+                    }
+                    reject(err);
+                    return;
+                }
+
+                resolve(result?.CurrentTransportState || null);
+            });
+        });
+    }
+
     startPlaybackMonitor() {
         if (this.playbackMonitorTimer) {
             return;
@@ -569,6 +587,17 @@ async shutdown() {
 
         this.trackEndCheckInFlight = true;
         try {
+            if (this.client && typeof this.client.getTransportInfo === 'function') {
+                const transportState = await this.doGetTransportState();
+                if (transportState === 'STOPPED') {
+                    this.endedNotified = true;
+                    this.playbackActive = false;
+                    console.log(`[${this.friendlyName}]: Transport is STOPPED; auto-playing next`);
+                    await this.next();
+                    return;
+                }
+            }
+
             const position = await this.doGetPosition();
             const duration = await this.doGetDuration();
             if (duration > 0 && position >= duration - TRACK_END_EPSILON_SECONDS) {
