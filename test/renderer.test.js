@@ -59,6 +59,8 @@ test('serializes playback and uses renderer-specific temporary files', () => {
     assert.match(renderer, /autoplay: false/);
     assert.match(renderer, /setTimeout\(startPlayback, PLAY_AFTER_LOAD_DELAY_MS\)/);
     assert.match(renderer, /dlnaFeatures: 'DLNA\.ORG_PN=AAC_ISO'/);
+    assert.match(renderer, /obj\.startPlaybackMonitor\(\)/);
+    assert.match(renderer, /await this\.next\(\)/);
     assert.doesNotMatch(doPlay, /client\.seek/);
 });
 
@@ -251,4 +253,51 @@ test('still rejects non-transient volume errors', async () => {
     };
 
     await assert.rejects(player.doGetVolume(), /bad SOAP response/);
+});
+
+test('auto-advances when playback reaches the track end', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.trackEndCheckInFlight = false;
+    player.stopped = false;
+    player.playbackActive = true;
+    player.loadingTrack = false;
+    player.hasLoadedTrack = true;
+    player.endedNotified = false;
+    player.doGetPosition = async () => 120;
+    player.doGetDuration = async () => 120;
+    let nextCalls = 0;
+    player.next = async () => {
+        nextCalls += 1;
+        return true;
+    };
+
+    await player.checkTrackEnd();
+
+    assert.strictEqual(nextCalls, 1);
+    assert.strictEqual(player.endedNotified, true);
+    assert.strictEqual(player.playbackActive, false);
+});
+
+test('does not auto-advance while playback is inactive', async () => {
+    const player = Object.create(Renderer.prototype);
+    player.friendlyName = 'Test speaker';
+    player.trackEndCheckInFlight = false;
+    player.stopped = false;
+    player.playbackActive = false;
+    player.loadingTrack = false;
+    player.hasLoadedTrack = true;
+    player.endedNotified = false;
+    player.doGetPosition = async () => 120;
+    player.doGetDuration = async () => 120;
+    let nextCalls = 0;
+    player.next = async () => {
+        nextCalls += 1;
+        return true;
+    };
+
+    await player.checkTrackEnd();
+
+    assert.strictEqual(nextCalls, 0);
+    assert.strictEqual(player.endedNotified, false);
 });

@@ -17,6 +17,8 @@ const PROXY_BASE_PORT = 8000;
 const PLAY_AFTER_LOAD_DELAY_MS = 1000;
 const PLAYBACK_START_STOP_GRACE_MS = 5000;
 const STOP_CALL_TIMEOUT_MS = 2000;
+const PLAYBACK_MONITOR_INTERVAL_MS = 2000;
+const TRACK_END_EPSILON_SECONDS = 1;
 
 function isTransientSocketError(err) {
     if (!err) {
@@ -54,6 +56,10 @@ class Renderer extends Player {
         this.stopProtectionExpiresAt = 0;
         this.stopCallTimeoutMs = STOP_CALL_TIMEOUT_MS;
         this.lastKnownVolume = { level: 0, muted: false };
+        this.playbackActive = false;
+        this.trackEndCheckInFlight = false;
+        this.playbackMonitorIntervalMs = PLAYBACK_MONITOR_INTERVAL_MS;
+        this.playbackMonitorTimer = null;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -164,6 +170,7 @@ async shutdown() {
     }
 
     console.log(`[${name}]: Stopping renderer`);
+    this.stopPlaybackMonitor();
 
     if (this.ytcr) {
         try {
@@ -313,8 +320,10 @@ async shutdown() {
                             obj.loadingTrack = false;
                             obj.hasLoadedTrack = !playErr;
                             if (!playErr) {
+                                obj.playbackActive = true;
                                 obj.stopProtectionExpiresAt =
                                     Date.now() + PLAYBACK_START_STOP_GRACE_MS;
+                                obj.startPlaybackMonitor();
                             }
                             if (playErr) {
                                 console.log(`[${obj.friendlyName}]: Play error:`);
@@ -348,6 +357,9 @@ async shutdown() {
         return new Promise(resolve => {
             this.client.pause(function(err) {
                 if (err) console.log(`[${obj.friendlyName}]: Pause error:`, err);
+                if (!err) {
+                    obj.playbackActive = false;
+                }
                 resolve(!err);
             });
         });
@@ -359,6 +371,10 @@ async shutdown() {
         return new Promise(resolve => {
             this.client.play(function(err) {
                 if (err) console.log(`[${obj.friendlyName}]: Resume error:`, err);
+                if (!err) {
+                    obj.playbackActive = true;
+                    obj.startPlaybackMonitor();
+                }
                 resolve(!err);
             });
         });
@@ -380,6 +396,8 @@ async shutdown() {
 
                 settled = true;
                 if (ok) {
+                    obj.playbackActive = false;
+                    obj.stopPlaybackMonitor();
                     obj.hasLoadedTrack = false;
                 }
                 resolve(ok);
@@ -486,6 +504,54 @@ async shutdown() {
                 }
             });
         });
+    }
+
+    startPlaybackMonitor() {
+        if (this.playbackMonitorTimer) {
+            return;
+        }
+
+        const obj = this;
+        this.playbackMonitorTimer = setInterval(function() {
+            obj.checkTrackEnd().catch(function(err) {
+                if (!isTransientSocketError(err)) {
+                    console.log(`[${obj.friendlyName}]: Track-end check failed:`);
+                    console.log(err);
+                }
+            });
+        }, this.playbackMonitorIntervalMs);
+    }
+
+    stopPlaybackMonitor() {
+        if (!this.playbackMonitorTimer) {
+            return;
+        }
+
+        clearInterval(this.playbackMonitorTimer);
+        this.playbackMonitorTimer = null;
+    }
+
+    async checkTrackEnd() {
+        if (this.trackEndCheckInFlight || this.stopped || !this.playbackActive ||
+            this.loadingTrack || !this.hasLoadedTrack || this.endedNotified) {
+            return;
+        }
+
+        this.trackEndCheckInFlight = true;
+        try {
+            const position = await this.doGetPosition();
+            const duration = await this.doGetDuration();
+            if (duration > 0 && position >= duration - TRACK_END_EPSILON_SECONDS) {
+                this.endedNotified = true;
+                this.playbackActive = false;
+                console.log(
+                    `[${this.friendlyName}]: Track ended at ${position}s / ${duration}s; auto-playing next`
+                );
+                await this.next();
+            }
+        } finally {
+            this.trackEndCheckInFlight = false;
+        }
     }
 }
 
