@@ -67,116 +67,42 @@ class Renderer extends Ytcr.Player {
             // });
 
             // Create a youtube cast receiver
-
-const options = {
-    port: YTCR_BASE_PORT + obj.index,
-
-    // DIAL device name shown by YouTube
-    friendlyName: obj.friendlyName,
-
-    // YouTube Lounge screen name
-    screenName: obj.friendlyName,
-
-    manufacturer: description.manufacturer,
-    modelName: description.modelName,
-
-    // Explicitly bind to the Pi's LAN address
-    bindToAddresses: ['192.168.0.154']
-};
-
-
-//            obj.ytcr = Ytcr.instance(obj, options);
-
-console.log("=== YTCR OPTIONS ===");
-console.log(JSON.stringify(options, null, 2));
-
-obj.ytcr = Ytcr.instance(obj, options);
-//
-
+            const options = {port: YTCR_BASE_PORT + obj.index,
+                             friendlyName: obj.friendlyName,
+                             manufacturer: description.manufacturer,
+                             modelName: description.modelName}; 
+            obj.ytcr = Ytcr.instance(obj, options);
             obj.ytcr.start();
 
             obj.ytcr.setDebug(true);
-
-obj.ytcr.on('clientConnected', client => {
-    console.log(`[${obj.friendlyName}]: YouTube client connected`);
-    console.log(client);
-});
-
-
+            obj.ytcr.on('connected', client => {
+                console.log(`Connected to ${client.name}`);
+                console.log(`${client}`);
+            });
         });
     }
 
-
-
-refresh(timeout) {
-    if (this.stopped) {
-        return;
+    refresh() {
+        this.lastSeenTime = Number(process.hrtime.bigint() / 1000000000n);
+        console.log("Refreshed renderer " + this.location + " to " + this.lastSeenTime);
     }
-
-    this.lastSeenTime =
-        Number(process.hrtime.bigint() / 1000000000n);
-
-    if (timeout !== undefined) {
-        this.timeout = timeout;
-    }
-
-    console.log(
-        `[${this.friendlyName || this.location}]: ` +
-        `Refreshed, timeout ${this.timeout}s`
-    );
-}
-
-
 
     isStale() {
-        // If an error occurred in setup, we are stale.
+        // If an error occurred in setup, we are stale. The program will delete us and recreate.e
         if (this.error) return true;
 
-        // If we have not been refreshed (i.e. discovered again) in this.timeout,
-        // we are stale.
-        const now = Number(process.hrtime.bigint() / 1000000000n);
-
+        // If we have not been refreshed (i.e. discovered again) in this.timeout, we are stale.
+        const now = Number(process.hrtime.bigint()  / 1000000000n);
         if (this.lastSeenTime + this.timeout < now) return true;
 
         return false;
     }
 
-async shutdown() {
-    const name = this.friendlyName || this.location;
-
-    if (this.stopped) {
-        console.log(`[${name}]: Renderer already stopped`);
-        return;
-    }
-
-    console.log(`[${name}]: Stopping renderer`);
-
-    if (this.ytcr) {
-        try {
-            console.log(`[${name}]: Stopping YTCR`);
-            await this.ytcr.stop();
-            console.log(`[${name}]: YTCR stopped`);
-        } catch (err) {
-            console.log(`[${name}]: YTCR stop error:`);
-            console.log(err);
-        }
-
-        this.ytcr = null;
-    }
-
-    this.stopped = true;
-
-    console.log(`[${name}]: Renderer stopped`);
-}
-
-
-
-
     getAudioUrl(videoId, callback) {
         const obj = this;
 
         // Call yt-dlp to get the audio URL
-        exec(`/home/pi/.local/bin/yt-dlp --js-runtimes /home/pi/.deno/bin/deno -f bestaudio[ext=m4a] --get-url https://www.youtube.com/watch?v=${videoId}`, function(err, stdout, stderr) {
+        exec(`yt-dlp -f bestaudio[ext=m4a] --get-url https://www.youtube.com/watch?v=${videoId}`, function(err, stdout, stderr) {
             if(err) {
                 console.log(`[${obj.friendlyName}]: Unable to get audio URL using yt-dlp. Using youtube-dl but this is slower!`);
 
@@ -189,7 +115,7 @@ async shutdown() {
                 //     console.log(stderr);
                 // }
 
-                exec(`/home/pi/.local/bin/yt-dlp --js-runtimes deno -f bestaudio[ext=m4a] --get-url https://www.youtube.com/watch?v=${videoId}`, function(err, stdout, stderr) {
+                exec(`youtube-dl -f bestaudio[ext=m4a] --get-url https://www.youtube.com/watch?v=${videoId}`, function(err, stdout, stderr) {
                     if(err) {
                         console.log(`[${obj.friendlyName}]: Error getting URL from youtube-dl:`);
                         // Enable to see what went wrong
@@ -224,12 +150,12 @@ async shutdown() {
         console.log(`[${this.friendlyName}]: Play ${videoId} at position ${position}s`);
         const obj = this;
         this.endedNotified = false;
-        this.loadingTrack = false;
+        this.loadingTrack = true;
         console.log(`[${this.friendlyName}]: RESET endedNotified for ${videoId}`);
 
             const localFile = `/tmp/upnptube-${videoId}.m4a`;
             const localUrl = `http://192.168.0.154:9002/upnptube-${videoId}.m4a`;
-            exec(`rm -f /tmp/upnptube-*.m4a && /home/pi/.local/bin/yt-dlp --js-runtimes /home/pi/.deno/bin/deno --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
+            exec(`rm -f /tmp/upnptube-*.m4a && /home/pi/.local/bin/yt-dlp --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
                 if (err) {
                     console.log(`[${obj.friendlyName}]: yt-dlp download failed`);
                     console.log(err);
@@ -238,70 +164,25 @@ async shutdown() {
 
                 // cleanup old files
                 exec('find /tmp -name "upnptube-*.m4a" -mtime +1 -delete');
-const options = {
-    autoplay: false,
-    contentType: 'audio/mp4'
-};
+                const options = {
+                    autoplay: true,
+                    contentType: 'audio/mp4'
+                };
 
-console.log("LOCAL URL:", localUrl);
-console.log(`[${obj.friendlyName}]: Loading track, requested position=${position}s`);
+                console.log("LOCAL URL:", localUrl);
 
-obj.client.load(localUrl, options, function(err, result) {
-    if (err) {
-        obj.loadingTrack = false;
-        console.log(`[${obj.friendlyName}]: Error loading local media:`);
-        console.log(err);
-        return;
-    }
-
-    console.log(`[${obj.friendlyName}]: Media loaded`);
-
-    const startPlayback = function() {
-        obj.client.play(function(playErr, playResult) {
-            obj.loadingTrack = false;
-
-            if (playErr) {
-                console.log(`[${obj.friendlyName}]: Play error:`);
-                console.log(playErr);
-                return;
-            }
-
-            console.log(
-                `[${obj.friendlyName}]: EXPLICIT PLAY at requested position ${position}s`
-            );
-
-            obj.notifyPlayed();
-        });
-    };
-
-    if (position > 0) {
-        console.log(
-            `[${obj.friendlyName}]: Seeking to requested position ${position}s`
-        );
-
-        obj.client.seek(position, function(seekErr, seekResult) {
-            if (seekErr) {
-                console.log(`[${obj.friendlyName}]: Seek error:`);
-                console.log(seekErr);
-
-                // If seeking fails, still start playback from 0.
-                startPlayback();
-                return;
-            }
-
-            console.log(
-                `[${obj.friendlyName}]: Seeked to ${position}s`
-            );
-
-            startPlayback();
-        });
-    } else {
-        startPlayback();
-    }
-});
-
-
-
+                obj.client.load(localUrl, options, function(err, result) {
+                    if (err) {
+                        console.log(`[${obj.friendlyName}]: Error loading local media:`);
+                        console.log(err);
+                    } else {
+                        obj.client.play(function(playErr, playResult) {
+                            obj.loadingTrack = false;
+                            console.log("EXPLICIT PLAY:", playErr, playResult);
+                            obj.notifyPlayed();
+                        });
+                    }
+                });
             });
 
     }

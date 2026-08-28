@@ -1,15 +1,6 @@
 #!/bin/node
 
 // Configuration
-const express = require('express');
-
-const fileApp = express();
-fileApp.use(express.static('/tmp'));
-
-fileApp.listen(9002, '0.0.0.0', function() {
-    console.log('Local file server listening on port 9002');
-});
-
 const DISCOVERY_PERIOD = 600; // Re-scan for upnp devices every 10m
 const PRUNE_PERIOD = 60;    // Check for stale renderers every 60s
 const DEFAULT_STALE_TIMEOUT = 300;  // If the renderer does not supply its own value
@@ -90,24 +81,14 @@ function remove_renderer(values) {
     }
 }
 
-
-async function pruneRenderers() {
-    for (const [location, renderer] of renderers) {
+function pruneRenderers() {
+    for(const [location, renderer] of renderers) {
         if (renderer.isStale()) {
             console.log("Removing stale renderer: " + renderer.location);
-
-            // Stop the YTCR receiver before removing the renderer
-            await renderer.shutdown();
-            // Now remove the renderer from our map
             renderers.delete(location);
-
-            console.log("Renderer removed: " + location);
         }
     }
 }
-
-
-
 
 function start_ssdp_discovery() {
     console.log("Doing SSDP discovery");

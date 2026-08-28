@@ -90,24 +90,14 @@ function remove_renderer(values) {
     }
 }
 
-
-async function pruneRenderers() {
-    for (const [location, renderer] of renderers) {
+function pruneRenderers() {
+    for(const [location, renderer] of renderers) {
         if (renderer.isStale()) {
             console.log("Removing stale renderer: " + renderer.location);
-
-            // Stop the YTCR receiver before removing the renderer
-            await renderer.shutdown();
-            // Now remove the renderer from our map
             renderers.delete(location);
-
-            console.log("Renderer removed: " + location);
         }
     }
 }
-
-
-
 
 function start_ssdp_discovery() {
     console.log("Doing SSDP discovery");

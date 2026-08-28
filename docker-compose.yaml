@@ -1,12 +1,14 @@
-version: '3'
-
 services:
-  upnpTube:
+  upnptube:
     container_name: upnp-tube
-    image: mas94uk/upnp-tube
-    network_mode: 'host'
-    build:
-      context: './'  # folder containing the Dockerfile
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'  # I prefer doing it that way, don't judge
+    image: node:20-bookworm
+    network_mode: host
     restart: unless-stopped
+
+    working_dir: /app
+
+    volumes:
+      - ./upnpTube:/app
+      - ./start.sh:/start.sh
+
+    command: bash /start.sh

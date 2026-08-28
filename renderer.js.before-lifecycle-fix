@@ -67,110 +67,36 @@ class Renderer extends Ytcr.Player {
             // });
 
             // Create a youtube cast receiver
-
-const options = {
-    port: YTCR_BASE_PORT + obj.index,
-
-    // DIAL device name shown by YouTube
-    friendlyName: obj.friendlyName,
-
-    // YouTube Lounge screen name
-    screenName: obj.friendlyName,
-
-    manufacturer: description.manufacturer,
-    modelName: description.modelName,
-
-    // Explicitly bind to the Pi's LAN address
-    bindToAddresses: ['192.168.0.154']
-};
-
-
-//            obj.ytcr = Ytcr.instance(obj, options);
-
-console.log("=== YTCR OPTIONS ===");
-console.log(JSON.stringify(options, null, 2));
-
-obj.ytcr = Ytcr.instance(obj, options);
-//
-
+            const options = {port: YTCR_BASE_PORT + obj.index,
+                             friendlyName: obj.friendlyName,
+                             manufacturer: description.manufacturer,
+                             modelName: description.modelName}; 
+            obj.ytcr = Ytcr.instance(obj, options);
             obj.ytcr.start();
 
             obj.ytcr.setDebug(true);
-
-obj.ytcr.on('clientConnected', client => {
-    console.log(`[${obj.friendlyName}]: YouTube client connected`);
-    console.log(client);
-});
-
-
+            obj.ytcr.on('connected', client => {
+                console.log(`Connected to ${client.name}`);
+                console.log(`${client}`);
+            });
         });
     }
 
-
-
-refresh(timeout) {
-    if (this.stopped) {
-        return;
+    refresh() {
+        this.lastSeenTime = Number(process.hrtime.bigint() / 1000000000n);
+        console.log("Refreshed renderer " + this.location + " to " + this.lastSeenTime);
     }
-
-    this.lastSeenTime =
-        Number(process.hrtime.bigint() / 1000000000n);
-
-    if (timeout !== undefined) {
-        this.timeout = timeout;
-    }
-
-    console.log(
-        `[${this.friendlyName || this.location}]: ` +
-        `Refreshed, timeout ${this.timeout}s`
-    );
-}
-
-
 
     isStale() {
-        // If an error occurred in setup, we are stale.
+        // If an error occurred in setup, we are stale. The program will delete us and recreate.e
         if (this.error) return true;
 
-        // If we have not been refreshed (i.e. discovered again) in this.timeout,
-        // we are stale.
-        const now = Number(process.hrtime.bigint() / 1000000000n);
-
+        // If we have not been refreshed (i.e. discovered again) in this.timeout, we are stale.
+        const now = Number(process.hrtime.bigint()  / 1000000000n);
         if (this.lastSeenTime + this.timeout < now) return true;
 
         return false;
     }
-
-async shutdown() {
-    const name = this.friendlyName || this.location;
-
-    if (this.stopped) {
-        console.log(`[${name}]: Renderer already stopped`);
-        return;
-    }
-
-    console.log(`[${name}]: Stopping renderer`);
-
-    if (this.ytcr) {
-        try {
-            console.log(`[${name}]: Stopping YTCR`);
-            await this.ytcr.stop();
-            console.log(`[${name}]: YTCR stopped`);
-        } catch (err) {
-            console.log(`[${name}]: YTCR stop error:`);
-            console.log(err);
-        }
-
-        this.ytcr = null;
-    }
-
-    this.stopped = true;
-
-    console.log(`[${name}]: Renderer stopped`);
-}
-
-
-
 
     getAudioUrl(videoId, callback) {
         const obj = this;

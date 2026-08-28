@@ -25,12 +25,10 @@
   },
   "homepage": "https://github.com/mas94uk/upnpTube#readme",
   "dependencies": {
-    "express": "^5.2.1",
     "http-proxy": "^1.18.1",
     "node-ssdp": "^4.0.1",
     "upnp-mediarenderer-client": "^1.4.0",
-    "yt-cast-receiver": "git+https://git@github.com/mas94uk/yt-cast-receiver.git",
-    "ytdl-core": "^4.11.5"
+    "yt-cast-receiver": "git+https://git@github.com/mas94uk/yt-cast-receiver.git"
   },
   "bin": {
     "upnpTube": "./index.js"
