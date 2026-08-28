@@ -40,6 +40,7 @@ test('serializes playback and uses renderer-specific temporary files', () => {
 
     assert.match(renderer, /this\.playerPlayPromise && this\.pendingVideoId === video\.id/);
     assert.match(renderer, /if \(this\.playPromise\) \{\s+return this\.playPromise;/);
+    assert.match(renderer, /if \(this\.loadingTrack\) \{\s+return true;/);
     assert.match(renderer, /upnptube-\$\{this\.index\}-\$\{videoId\}\.m4a/);
     assert.match(renderer, /--js-runtimes node/);
 });

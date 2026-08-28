@@ -336,6 +336,10 @@ async shutdown() {
 
     async doStop() {
         console.log(`[${this.friendlyName}]: Stop`);
+        if (this.loadingTrack) {
+            return true;
+        }
+
         const obj = this;
         return new Promise(resolve => {
             this.client.stop(function(err) {
