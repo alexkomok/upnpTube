@@ -1,0 +1,13 @@
+diff --git a/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js b/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
+index 311a743..9e896d9 100644
+--- a/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
++++ b/node_modules/yt-cast-receiver/dist/lib/app/Playlist.js
+@@ -85,7 +85,7 @@ class Playlist extends EventEmitter {
+         __classPrivateFieldSet(this, _Playlist_id, data.listId, "f");
+         __classPrivateFieldSet(this, _Playlist_videoIds, data.videoIds ? data.videoIds.split(',') : [], "f");
+         if (message.name === 'setPlaylist') {
+-            if (data.currentIndex && data.videoId) {
++            if (data.currentIndex !== undefined && data.currentIndex !== null && data.videoId) {
+                 const context = {
+                     playlistId: data.listId,
+                     index: parseInt(data.currentIndex, 10)
