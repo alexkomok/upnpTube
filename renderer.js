@@ -34,6 +34,7 @@ class Renderer extends Player {
         this.timeout = timeout;
         this.httpServer = null;
         this.hasLoadedTrack = false;
+        this.playPromise = null;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -215,6 +216,10 @@ async shutdown() {
      * The methods implementing yt-cast-receiver.Player
      */
     async doPlay(video, position = 0) {
+        if (this.playPromise) {
+            return this.playPromise;
+        }
+
         const videoId = video.id;
         console.log(`[${this.friendlyName}]: Play ${videoId} at position ${position}s`);
         const obj = this;
@@ -222,10 +227,10 @@ async shutdown() {
         this.loadingTrack = true;
         console.log(`[${this.friendlyName}]: RESET endedNotified for ${videoId}`);
 
-        return new Promise(resolve => {
-            const localFile = `/tmp/upnptube-${videoId}.m4a`;
-            const localUrl = `http://192.168.0.154:9002/upnptube-${videoId}.m4a`;
-            exec(`rm -f /tmp/upnptube-*.m4a && /home/pi/.local/bin/yt-dlp --js-runtimes /home/pi/.deno/bin/deno --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
+        const playback = new Promise(resolve => {
+            const localFile = `/tmp/upnptube-${this.index}-${videoId}.m4a`;
+            const localUrl = `http://192.168.0.154:9002/upnptube-${this.index}-${videoId}.m4a`;
+            exec(`rm -f "${localFile}" && /home/pi/.local/bin/yt-dlp --js-runtimes node --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
                 if (err) {
                     obj.loadingTrack = false;
                     obj.hasLoadedTrack = false;
@@ -273,6 +278,15 @@ async shutdown() {
                 });
             });
         });
+
+        this.playPromise = playback;
+        try {
+            return await playback;
+        } finally {
+            if (this.playPromise === playback) {
+                this.playPromise = null;
+            }
+        }
     }
 
 
