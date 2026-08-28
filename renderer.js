@@ -33,6 +33,7 @@ class Renderer extends Player {
         this.index = index;
         this.timeout = timeout;
         this.httpServer = null;
+        this.hasLoadedTrack = false;
         this.refresh();
 
         // Instantiate the mediarender client
@@ -227,6 +228,7 @@ async shutdown() {
             exec(`rm -f /tmp/upnptube-*.m4a && /home/pi/.local/bin/yt-dlp --js-runtimes /home/pi/.deno/bin/deno --force-overwrites -f 140 -o "${localFile}" "https://www.youtube.com/watch?v=${videoId}"`, function(err) {
                 if (err) {
                     obj.loadingTrack = false;
+                    obj.hasLoadedTrack = false;
                     console.log(`[${obj.friendlyName}]: yt-dlp download failed`);
                     console.log(err);
                     resolve(false);
@@ -248,6 +250,7 @@ async shutdown() {
                     const startPlayback = function() {
                         obj.client.play(function(playErr) {
                             obj.loadingTrack = false;
+                            obj.hasLoadedTrack = !playErr;
                             if (playErr) {
                                 console.log(`[${obj.friendlyName}]: Play error:`);
                                 console.log(playErr);
@@ -302,6 +305,7 @@ async shutdown() {
         return new Promise(resolve => {
             this.client.stop(function(err) {
                 if (err) console.log(`[${obj.friendlyName}]: Stop error:`, err);
+                if (!err) obj.hasLoadedTrack = false;
                 resolve(!err);
             });
         });
@@ -343,6 +347,10 @@ async shutdown() {
     }
 
     async doGetPosition() {
+        if (!this.hasLoadedTrack) {
+            return 0;
+        }
+
         const obj = this;
         return new Promise(function(resolve, reject) {
             obj.client.getPosition(function(err, result) {
@@ -356,6 +364,10 @@ async shutdown() {
     }
 
     async doGetDuration() {
+        if (!this.hasLoadedTrack) {
+            return 0;
+        }
+
         const obj = this;
         return new Promise(function(resolve, reject) {
             obj.client.getDuration(function(err, result) {
