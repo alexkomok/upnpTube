@@ -349,22 +349,7 @@ async shutdown() {
                 if(err) {
                     reject(err);
                 } else {
-                    obj.client.getDuration(function(durationErr, duration) {
-                        if (
-                            !obj.loadingTrack &&
-                            !obj.endedNotified &&
-                            !durationErr &&
-                            duration > 0 &&
-                            result >= duration
-                        ) {
-                            obj.endedNotified = true;
-                            obj.next().catch(nextErr => {
-                                console.log(`[${obj.friendlyName}]: Failed to advance queue:`);
-                                console.log(nextErr);
-                            });
-                        }
-                        resolve(result);
-                    });
+                    resolve(result);
                 }
             });
         });

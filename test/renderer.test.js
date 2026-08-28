@@ -13,10 +13,14 @@ test('adapts DLNA volume controls to the YouTube Music receiver contract', async
         setVolume(volume, callback) {
             requestedVolume = volume;
             callback(null);
+        },
+        getPosition(callback) {
+            callback(null, 30);
         }
     };
 
     assert.deepStrictEqual(await player.doGetVolume(), { level: 42, muted: false });
     assert.strictEqual(await player.doSetVolume({ level: 70, muted: true }), true);
     assert.strictEqual(requestedVolume, 70);
+    assert.strictEqual(await player.doGetPosition(), 30);
 });
